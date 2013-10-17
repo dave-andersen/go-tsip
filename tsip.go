@@ -51,19 +51,19 @@ type SecondaryTimingPacket struct {
 	DiscipliningActivity uint8
 	SpareStatus1         uint8
 	SpareStatus2         uint8
-	PPSOffset            int32
-	TenMhzOffset         int32
+	PPSOffset            float32
+	TenMhzOffset         float32
 	DACValue             uint32
-	DACVoltage           int32
-	Temperature          int32
-	Latitude             int64
-	Longitude            int64
-	Altitude             int64
+	DACVoltage           float32
+	Temperature          float32
+	Latitude             float64
+	Longitude            float64
+	Altitude             float64
 	Spare                int64
 }
 
 func (p *SecondaryTimingPacket) Handle() {
-	fmt.Printf("Secondary packet:  RCV %d, DIS %d, SUR %d PPS-OFFSET: %d CriticalAlarm: %x MinorAlarm: %x\n", p.ReceiverMode, p.DiscipliningMode, p.SelfSurveyProgress, p.PPSOffset, p.CriticalAlarms, p.MinorAlarms)
+	fmt.Printf("Secondary packet:  RCV %d, DIS %d, SUR %d PPS-OFFSET: %f CriticalAlarm: %x MinorAlarm: %x  Temp: %f\n", p.ReceiverMode, p.DiscipliningMode, p.SelfSurveyProgress, p.PPSOffset, p.CriticalAlarms, p.MinorAlarms, p.Temperature)
 }
 
 func (p *PrimaryTimingPacket) Handle() {
@@ -107,11 +107,9 @@ func main() {
 	// Find a start of message
 	for {
 		c, _ := br.ReadByte()
-		fmt.Println("scanning forward: ", c)
 		if c == 0x10 {
 			c, _ := br.ReadByte()
 			if c == 0x3 {
-				fmt.Println("Got message end")
 				break
 			}
 		}
