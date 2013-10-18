@@ -34,23 +34,23 @@ type GetSoftwareVersionCmd struct {
 	// NODATA - this command is empty
 }
 
-
 // Note:  The Thunderbolt E appears to send year - 2000 for the App/GPS info, not
 // Year - 1900.  (But the packet struct here is written per the spec).
 // Also, Trimble refers to the software version as 2.10, but it gets
 // reported here - again, per the spec, as 10.2.  Beats me.
 type SoftwareVersionPacket struct {
-	AppMajor uint8
-	AppMinor uint8
-	AppMonth uint8
-	AppDay uint8
+	AppMajor        uint8
+	AppMinor        uint8
+	AppMonth        uint8
+	AppDay          uint8
 	AppYearFrom1900 uint8
-	GPSMajor uint8
-	GPSMinor uint8
-	GPSMonth uint8
-	GPSDay uint8
+	GPSMajor        uint8
+	GPSMinor        uint8
+	GPSMonth        uint8
+	GPSDay          uint8
 	GPSYearFrom1900 uint8
 }
+
 func (c *GetSoftwareVersionCmd) PacketID() []byte { return []byte{0x1f} }
 
 type PrimaryTimingPacket struct {
@@ -105,13 +105,12 @@ func (p *SoftwareVersionPacket) Handle() {
 		p.GPSMajor, p.GPSMinor, int(p.GPSYearFrom1900)+1900, p.GPSMonth, p.GPSDay)
 }
 
-
 var actions []Action
 
 func init() {
 	// HUMAN:  The parser requires that you list these in descending
 	// order of MatchSequence length.
-	actions = []Action{ 
+	actions = []Action{
 		Action{[]byte{0x8f, 0xab}, &PrimaryTimingPacket{}},
 		Action{[]byte{0x8f, 0xac}, &SecondaryTimingPacket{}},
 		Action{[]byte{0x45}, &SoftwareVersionPacket{}},
@@ -123,12 +122,12 @@ func sendCmd(c trimbleCmd) {
 	// DLE.id.{cmd bytes}.DLE.ETX
 	_ = binary.Write(buf, binary.BigEndian, c)
 	bufBytes := buf.Bytes()
-	bufNew := bytes.Replace(bufBytes, []byte{0x10}, []byte{0x10,0x10}, -1)
+	bufNew := bytes.Replace(bufBytes, []byte{0x10}, []byte{0x10, 0x10}, -1)
 	buf.Reset()
 	buf.WriteByte(0x10)
 	buf.Write(c.PacketID())
 	buf.Write(bufNew)
-	buf.Write([]byte{0x10,0x03})
+	buf.Write([]byte{0x10, 0x03})
 
 	buf.WriteTo(theConn)
 }
