@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 )
 
 const MSG_MAX_LEN = 256
@@ -24,6 +25,33 @@ type Action struct {
 	MatchSequence []byte
 	decodeInto    handleable
 }
+
+type trimbleCmd interface {
+	PacketID() []byte
+}
+
+type GetSoftwareVersionCmd struct {
+	// NODATA - this command is empty
+}
+
+
+// Note:  The Thunderbolt E appears to send year - 2000 for the App/GPS info, not
+// Year - 1900.  (But the packet struct here is written per the spec).
+// Also, Trimble refers to the software version as 2.10, but it gets
+// reported here - again, per the spec, as 10.2.  Beats me.
+type SoftwareVersionPacket struct {
+	AppMajor uint8
+	AppMinor uint8
+	AppMonth uint8
+	AppDay uint8
+	AppYearFrom1900 uint8
+	GPSMajor uint8
+	GPSMinor uint8
+	GPSMonth uint8
+	GPSDay uint8
+	GPSYearFrom1900 uint8
+}
+func (c *GetSoftwareVersionCmd) PacketID() []byte { return []byte{0x1f} }
 
 type PrimaryTimingPacket struct {
 	Subcode    uint8
@@ -71,30 +99,63 @@ func (p *PrimaryTimingPacket) Handle() {
 
 }
 
+func (p *SoftwareVersionPacket) Handle() {
+	fmt.Printf("Software Version Response.  App: %d.%d %d/%d/%d  GPS: %d.%d %d/%d/%d\n",
+		p.AppMajor, p.AppMinor, int(p.AppYearFrom1900)+1900, p.AppMonth, p.AppDay,
+		p.GPSMajor, p.GPSMinor, int(p.GPSYearFrom1900)+1900, p.GPSMonth, p.GPSDay)
+}
+
+
 var actions []Action
 
 func init() {
-	// HUMAN:  The parser requires that you append these in descending
+	// HUMAN:  The parser requires that you list these in descending
 	// order of MatchSequence length.
-	actions = append(actions, Action{[]byte{0x8f, 0xab}, &PrimaryTimingPacket{}})
-	actions = append(actions, Action{[]byte{0x8f, 0xac}, &SecondaryTimingPacket{}})
+	actions = []Action{ 
+		Action{[]byte{0x8f, 0xab}, &PrimaryTimingPacket{}},
+		Action{[]byte{0x8f, 0xac}, &SecondaryTimingPacket{}},
+		Action{[]byte{0x45}, &SoftwareVersionPacket{}},
+	}
+}
+
+func sendCmd(c trimbleCmd) {
+	buf := new(bytes.Buffer)
+	// DLE.id.{cmd bytes}.DLE.ETX
+	_ = binary.Write(buf, binary.BigEndian, c)
+	bufBytes := buf.Bytes()
+	bufNew := bytes.Replace(bufBytes, []byte{0x10}, []byte{0x10,0x10}, -1)
+	buf.Reset()
+	buf.WriteByte(0x10)
+	buf.Write(c.PacketID())
+	buf.Write(bufNew)
+	buf.Write([]byte{0x10,0x03})
+
+	buf.WriteTo(theConn)
 }
 
 func handleMsg(msg []byte) {
 	var p handleable
+	handled := false
 
 	for _, a := range actions {
 		alen := len(a.MatchSequence)
 		if bytes.Equal(msg[0:alen], a.MatchSequence) {
 			p = a.decodeInto
+			handled = true
 			break
 		}
 	}
 
-	r := bytes.NewReader(msg[1:])
-	binary.Read(r, binary.BigEndian, p)
-	p.Handle()
+	if handled {
+		r := bytes.NewReader(msg[1:])
+		binary.Read(r, binary.BigEndian, p)
+		p.Handle()
+	} else {
+		fmt.Printf("Unknown packet type: %x (%x)\n", msg[0], msg[1])
+	}
 }
+
+var theConn net.Conn // xxx, fix me...
 
 func main() {
 	fmt.Println("connecting to serial server")
@@ -103,6 +164,7 @@ func main() {
 		fmt.Println("could not connect:", err)
 		return
 	}
+	theConn = conn
 	br := bufio.NewReader(conn)
 	// Find a start of message
 	for {
@@ -115,6 +177,13 @@ func main() {
 		}
 	}
 	state := 0
+	// XXX - demo:  Grab the software version command after running for a second.
+	go func() {
+		time.Sleep(time.Second)
+		fmt.Println("Sending GetSoftwareVersionCmd")
+		sendCmd(&GetSoftwareVersionCmd{})
+	}()
+
 	var msg [MSG_MAX_LEN]byte
 	msgptr := 0
 	for {

@@ -1,9 +1,12 @@
 go-tsip
 =======
 
-A very skeletal program to read &amp; print out some Trimble GPS TSIP packets,
-specifically the Primary and Secondary timing packets sent each second by
-Trimble Thunderbolt timing receivers.
+A very skeletal program to talk Trimble GPS TSIP packets, with a focus
+on Trimble's Thunderbolt timing GPS receiver.
+It currently supports Software Version, Primary, and Secondary timing
+packets.  The latter are sent each second by the Thunderbolt.
+It has a rudimentary command-sending framework that currently
+knows only how to request the software version.
 
 I usually run it as 'go run tsip.go'
 
